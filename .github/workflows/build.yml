@@ -6,41 +6,99 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 120
+
+    env:
+      ANDROID_HOME: /opt/android-sdk
+      FLUTTER_VERSION: "3.24.5"
+      PYTHON_VERSION: "3.11"
 
     steps:
     - uses: actions/checkout@v4
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install packages
+    - name: Cache Flutter
+      id: cache-flutter
+      uses: actions/cache@v4
+      with:
+        path: /opt/flutter
+        key: flutter-${{ env.FLUTTER_VERSION }}-linux
+
+    - name: Install Flutter ${{ env.FLUTTER_VERSION }}
+      if: steps.cache-flutter.outputs.cache-hit != 'true'
       run: |
-        pip install -r requirements.txt
-        flutter --version 2>/dev/null || echo "Flutter will be installed by flet"
+        cd /opt
+        wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz"
+        tar xf "flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz"
+        rm "flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz"
+
+    - name: Add Flutter to PATH
+      run: |
+        echo "/opt/flutter/bin" >> $GITHUB_PATH
+        echo "/opt/flutter/bin/cache/dart-sdk/bin" >> $GITHUB_PATH
+        flutter --version
+
+    - name: Cache Android SDK
+      id: cache-android
+      uses: actions/cache@v4
+      with:
+        path: /opt/android-sdk
+        key: android-sdk-linux
+
+    - name: Setup Android SDK
+      run: |
+        if [ ! -d "/opt/android-sdk/platforms" ]; then
+          mkdir -p /opt/android-sdk
+          cd /opt/android-sdk
+          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          mkdir -p cmdline-tools/latest
+          cp -r cmdline-tools/{bin,lib,NOTICE.txt,source.properties} cmdline-tools/latest/
+        fi
+        export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+        yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --install \
+          "platforms;android-34" \
+          "build-tools;34.0.0" \
+          "ndk;25.2.9519653" \
+          2>&1 | tail -5 || true
+
+    - name: Install Flet
+      run: |
+        pip install flet==0.24.1 requests
+
+    - name: Flutter doctor
+      run: |
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        flutter doctor -v 2>&1 | tail -20
 
     - name: Build APK
+      env:
+        ANDROID_HOME: /opt/android-sdk
+        ANDROID_SDK_ROOT: /opt/android-sdk
+        PUB_HOSTED_URL: "https://pub.flutter-io.cn"
+        FLUTTER_STORAGE_BASE_URL: "https://storage.flutter-io.cn"
       run: |
         echo "y" | flet build apk \
-          --output maya.apk \
+          --output /tmp/maya-assistant.apk \
           --product "Maya Assistant" \
           --org com.maya.assistant \
           2>&1 | tail -80
 
-    - name: Show result
-      if: always()
+    - name: Verify APK exists
       run: |
-        echo "=== APK search ==="
-        find /home -name "*.apk" 2>/dev/null
-        find /tmp -name "*.apk" 2>/dev/null
-        ls -la maya.apk 2>/dev/null || echo "No maya.apk in cwd"
-        ls -la *.apk 2>/dev/null || echo "No apk in cwd"
+        ls -la /tmp/maya-assistant.apk 2>/dev/null
+        find /opt -name "*.apk" -type f 2>/dev/null
+        find /home -name "*.apk" -type f 2>/dev/null
 
-    - name: Upload
+    - name: Upload APK
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: MayaAssistant.apk
-        path: maya.apk
+        path: /tmp/maya-assistant.apk
         retention-days: 7
