@@ -10,7 +10,7 @@ import time
 import requests
 
 # --- App Configuration ---
-APP_NAME = "WhatsApp Assistant"
+APP_NAME = "Maya Assistant"
 APP_VERSION = "1.0.0"
 
 CONFIG_DIR = "/data/data/com.termux/files/home/whatsapp-assistant-app"

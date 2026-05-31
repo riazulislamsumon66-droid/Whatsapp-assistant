@@ -1,7 +1,7 @@
 [app]
-title = WhatsApp Assistant
-package.name = whatsappassistant
-package.domain = com.assistant
+title = Maya Assistant
+package.name = mayaassistant
+package.domain = com.maya.assistant
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,txt
 version = 1.0.0
