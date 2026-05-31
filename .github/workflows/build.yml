@@ -15,10 +15,10 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af6c3
+      uses: actions/checkout@v4
 
     - name: Set up Python 3.10
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -40,7 +40,7 @@ jobs:
           xz-utils
 
     - name: Cache .buildozer
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+      uses: actions/cache@v4
       with:
         path: |
           ~/.buildozer
@@ -82,7 +82,7 @@ jobs:
 
     - name: Upload APK
       if: steps.find_apk.outputs.apk_path != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa0e
+      uses: actions/upload-artifact@v4
       with:
         name: MayaWhatsAppAssistant.apk
         path: ${{ steps.find_apk.outputs.apk_path }}
