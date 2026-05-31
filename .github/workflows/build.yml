@@ -9,7 +9,6 @@ jobs:
     timeout-minutes: 120
 
     env:
-      # /opt থেকে সরিয়ে সরাসরি হোম ডিরেক্টরিতে শিফট করা হলো
       ANDROID_HOME: /home/runner/android-sdk
       FLUTTER_VERSION: "3.24.5"
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -61,12 +60,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/android-sdk
-        key: android-sdk-34
+        key: android-sdk-34-v2  # ক্যাশ কি আপডেট করা হলো নতুন কম্পোনেন্টের জন্য
 
     - name: Setup Android SDK
       run: |
-        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ]; then
-          echo "Setting up Android SDK..."
+        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ] || [ ! -f "/home/runner/android-sdk/platform-tools/adb" ]; then
+          echo "Setting up Android SDK with Platform Tools..."
           mkdir -p /home/runner/android-sdk/cmdline-tools/latest
           
           cd /tmp
@@ -78,9 +77,11 @@ jobs:
           
           export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          
+          # platform-tools (যা adb সমস্যা সমাধান করবে) এবং প্রয়োজনীয় বিল্ড টুলস ইন্সটল
+          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
         else
-          echo "Android SDK cached!"
+          echo "Android SDK and Platform Tools cached!"
         fi
 
     - name: Install Flet
@@ -90,8 +91,7 @@ jobs:
       run: |
         export ANDROID_HOME=/home/runner/android-sdk
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
-        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
-        # ফ্ল্যাটারকে এসডিকে পাথ চিনিয়ে দেওয়া
+        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
         flutter config --android-sdk /home/runner/android-sdk
         flutter doctor
 
@@ -99,7 +99,13 @@ jobs:
       run: |
         export ANDROID_HOME=/home/runner/android-sdk
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
-        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
+        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
+        
+        # গ্র্যাডল যাতে গ্লোবাল বা টেম্পলেট লেভেলে compileSdkVersion মিস না করে
+        export CLOUDSDK_ANDROID_COMPILER_VERSION=34
+        export CLOUDSDK_ANDROID_TARGET_VERSION=34
+        
+        # Flet বিল্ড কমান্ড রান করা
         flet build apk --product "Maya Assistant" --org com.maya.assistant
 
     - name: Find and list APK
