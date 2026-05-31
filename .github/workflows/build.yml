@@ -97,11 +97,11 @@ jobs:
         if: always()
         run: |
           echo "=== All APK files in workspace ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-          echo "=== Checking common Flet paths ==="
-          ls -la build/apk/ 2>/dev/null || echo "No build/apk/"
-          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "No flutter-apk/"
-          ls -la build/ 2>/dev/null || echo "No build folder"
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found anywhere"
+          echo "=== Common Flet paths ==="
+          ls -la build/apk/ 2>/dev/null || echo "build/apk not found"
+          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "flutter-apk dir not found"
+          ls -la build/ 2>/dev/null || echo "build dir not found"
 
       - name: Upload APK
         if: always()
