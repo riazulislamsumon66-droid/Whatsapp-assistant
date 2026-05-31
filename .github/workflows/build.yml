@@ -10,7 +10,8 @@ jobs:
 
     env:
       ANDROID_HOME: /home/runner/android-sdk
-      FLUTTER_VERSION: "3.24.5"
+      # নতুন Flet 0.85.2 এর রিকোয়ারমেন্ট অনুযায়ী ফ্ল্যাটার ভার্সন আপডেট করা হলো
+      FLUTTER_VERSION: "3.41.7"
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
@@ -40,7 +41,8 @@ jobs:
         if [ ! -f "/home/runner/flutter/bin/flutter" ]; then
           echo "Downloading Flutter ${{ env.FLUTTER_VERSION }}..."
           cd /tmp
-          wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz" -O flutter.tar.xz
+          # লেটেস্ট ফ্ল্যাটার আর্ক্রাইভ ইউআরএল
+          wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz" -O flutter.tar.xz
           cd /home/runner
           mkdir -p /home/runner/flutter
           tar xf /tmp/flutter.tar.xz -C /home/runner/
@@ -105,7 +107,7 @@ jobs:
         export CLOUDSDK_ANDROID_COMPILER_VERSION=34
         export CLOUDSDK_ANDROID_TARGET_VERSION=34
         
-        # Flet বিল্ড কনফিগারেশন ফাইল তৈরি (wakelock_plus এরর ফিক্স করার জন্য)
+        # Flet বিল্ড কনফিগারেশন ফাইল তৈরি (wakelock_plus এবং অন্যান্য প্লাগইনের SDK এরর ফিক্স করার জন্য)
         cat <<EOF > flet-build.toml
         [android]
         compile_sdk_version = 34
@@ -113,8 +115,8 @@ jobs:
         min_sdk_version = 21
         EOF
         
-        # Flet বিল্ড কমান্ড রান করা
-        flet build apk --product "Maya Assistant" --org com.maya.assistant
+        # Flet বিল্ড কমান্ড রান করা (yes পাইপ করার মাধ্যমে যেকোনো অটো-প্রম্পট কনফার্ম করা হলো)
+        yes y | flet build apk --product "Maya Assistant" --org com.maya.assistant
 
     - name: Find and list APK
       if: always()
