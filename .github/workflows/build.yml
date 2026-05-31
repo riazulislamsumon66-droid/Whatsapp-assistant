@@ -34,15 +34,14 @@ jobs:
           echo "Downloading Flutter ${{ env.FLUTTER_VERSION }}..."
           cd /tmp
           wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz" -O flutter.tar.xz
-          ls -lh flutter.tar.xz
           cd /opt
-          tar xf /tmp/flutter.tar.xz
-          rm /tmp/flutter.tar.xz
+          sudo mkdir -p /opt/flutter
+          sudo tar xf /tmp/flutter.tar.xz -C /opt/
+          sudo rm /tmp/flutter.tar.xz
           echo "Flutter installed!"
         else
           echo "Flutter cached!"
         fi
-        /opt/flutter/bin/flutter --version
 
     - name: Add Flutter to PATH
       run: |
@@ -62,15 +61,15 @@ jobs:
       run: |
         if [ ! -d "/opt/android-sdk/platforms/android-34" ]; then
           echo "Setting up Android SDK..."
-          mkdir -p /opt/android-sdk/cmdline-tools
-          cd /opt/android-sdk/cmdline-tools
+          sudo mkdir -p /opt/android-sdk/cmdline-tools/latest
+          cd /tmp
           wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
           unzip -q tools.zip
-          mkdir -p latest
-          cp -r cmdline-tools/{bin,lib,NOTICE.txt,source.properties} latest/ 2>/dev/null || true
+          sudo cp -r cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/
+          
           export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses 2>/dev/null || true
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -3 || true
+          yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
         else
           echo "Android SDK cached!"
         fi
@@ -82,34 +81,34 @@ jobs:
       run: |
         export ANDROID_HOME=/opt/android-sdk
         export ANDROID_SDK_ROOT=/opt/android-sdk
-        flutter doctor 2>&1 | tail -15
+        export PATH="/opt/flutter/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+        flutter doctor
 
     - name: Build APK with Flet
       run: |
         export ANDROID_HOME=/opt/android-sdk
         export ANDROID_SDK_ROOT=/opt/android-sdk
-        echo "y" | flet build apk \
-          --product "Maya Assistant" \
-          --org com.maya.assistant \
-          2>&1 | tail -100
+        export PATH="/opt/flutter/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+        flet build apk --product "Maya Assistant" --org com.maya.assistant
 
     - name: Find and list APK
-        if: always()
-        run: |
-          echo "=== All APK files in workspace ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found anywhere"
-          echo "=== Common Flet paths ==="
-          ls -la build/apk/ 2>/dev/null || echo "build/apk not found"
-          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "flutter-apk dir not found"
-          ls -la build/ 2>/dev/null || echo "build dir not found"
+      if: always()
+      run: |
+        echo "=== All APK files in workspace ==="
+        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found anywhere"
+        echo "=== Common Flet paths ==="
+        ls -la build/apk/ 2>/dev/null || echo "build/apk not found"
+        ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "flutter-apk dir not found"
+        ls -la build/ 2>/dev/null || echo "build dir not found"
 
-      - name: Upload APK
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Maya-Assistant-APK
-          path: |
-            build/apk/*.apk
-            build/app/outputs/flutter-apk/*.apk
-            build/**/*.apk
-          retention-days: 30
+    - name: Upload APK
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: Maya-Assistant-APK
+        path: |
+          build/apk/*.apk
+          build/app/outputs/flutter-apk/*.apk
+          build/**/*.apk
+        retention-days: 30
+        
