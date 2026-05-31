@@ -60,7 +60,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/android-sdk
-        key: android-sdk-34-v2  # ক্যাশ কি আপডেট করা হলো নতুন কম্পোনেন্টের জন্য
+        key: android-sdk-34-v2
 
     - name: Setup Android SDK
       run: |
@@ -78,14 +78,14 @@ jobs:
           export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
           
-          # platform-tools (যা adb সমস্যা সমাধান করবে) এবং প্রয়োজনীয় বিল্ড টুলস ইন্সটল
+          # platform-tools এবং প্রয়োজনীয় SDK বিল্ড টুলস ইন্সটল
           /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
         else
           echo "Android SDK and Platform Tools cached!"
         fi
 
     - name: Install Flet
-      run: pip install flet==0.24.1 requests
+      run: pip install --upgrade flet requests
 
     - name: Configure Flutter and Android SDK
       run: |
@@ -101,9 +101,17 @@ jobs:
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
         export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
         
-        # গ্র্যাডল যাতে গ্লোবাল বা টেম্পলেট লেভেলে compileSdkVersion মিস না করে
+        # গ্র্যাডল এনভায়রনমেন্টে অ্যান্ড্রয়েড SDK ভার্সন পুশ করা
         export CLOUDSDK_ANDROID_COMPILER_VERSION=34
         export CLOUDSDK_ANDROID_TARGET_VERSION=34
+        
+        # Flet বিল্ড কনফিগারেশন ফাইল তৈরি (wakelock_plus এরর ফিক্স করার জন্য)
+        cat <<EOF > flet-build.toml
+        [android]
+        compile_sdk_version = 34
+        target_sdk_version = 34
+        min_sdk_version = 21
+        EOF
         
         # Flet বিল্ড কমান্ড রান করা
         flet build apk --product "Maya Assistant" --org com.maya.assistant
