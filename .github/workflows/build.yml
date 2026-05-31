@@ -10,7 +10,8 @@ jobs:
 
     env:
       ANDROID_HOME: /home/runner/android-sdk
-      FLUTTER_VERSION: "3.41.7"
+      # Flet 0.24.1 এর জন্য সবচেয়ে স্টেবল এবং রিকমেন্ডেড ফ্ল্যাটার ভার্সন
+      FLUTTER_VERSION: "3.24.5"
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
@@ -60,12 +61,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/android-sdk
-        key: android-sdk-36-v1  # Flutter 3.41.7 এর জন্য SDK 36 ক্যাশ কি সেট করা হলো
+        key: android-sdk-34-v3
 
     - name: Setup Android SDK
       run: |
-        if [ ! -d "/home/runner/android-sdk/platforms/android-36" ] || [ ! -f "/home/runner/android-sdk/platform-tools/adb" ]; then
-          echo "Setting up Android SDK 36 with Platform Tools..."
+        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ] || [ ! -f "/home/runner/android-sdk/platform-tools/adb" ]; then
+          echo "Setting up Android SDK 34..."
           mkdir -p /home/runner/android-sdk/cmdline-tools/latest
           
           cd /tmp
@@ -78,16 +79,16 @@ jobs:
           export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
           
-          # Flutter 3.41.7 এর চাহিদামতো platforms;android-36 এবং build-tools ইন্সটল করা হলো
-          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36" "build-tools;36.0.0-rc1" "platform-tools" "build-tools;28.0.3"
+          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
         else
-          echo "Android SDK 36 and Platform Tools cached!"
+          echo "Android SDK 34 cached!"
         fi
 
-    - name: Install Flet and Dependencies
+    - name: Install Specific Stable Flet
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        pip install --upgrade flet requests watchdog
+        # এখানে নির্দিষ্ট স্টেবল ভার্সন ফোর্স করা হলো যাতে watchdog লক এরর না আসে
+        pip install flet==0.24.1 requests
 
     - name: Configure Flutter and Android SDK
       run: |
@@ -103,20 +104,20 @@ jobs:
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
         export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
         
-        # গ্র্যাডল কম্পাইলার ভার্সন ৩৬ এ পুশ করা হলো
-        export CLOUDSDK_ANDROID_COMPILER_VERSION=36
-        export CLOUDSDK_ANDROID_TARGET_VERSION=36
+        # গ্র্যাডল প্লাগইন কম্পাইলার কনফিগারেশন
+        export CLOUDSDK_ANDROID_COMPILER_VERSION=34
+        export CLOUDSDK_ANDROID_TARGET_VERSION=34
         
-        # Flet-এর টেম্পলেট কনফিগারেশনে SDK 36 সেট করা হলো
+        # Flet বিল্ড কনফিগারেশন টেম্পলেট তৈরি করা
         cat <<EOF > flet-build.toml
         [android]
-        compile_sdk_version = 36
-        target_sdk_version = 36
+        compile_sdk_version = 34
+        target_sdk_version = 34
         min_sdk_version = 21
         EOF
         
-        # Flet বিল্ড কমান্ড রান করা
-        yes y | flet build apk --product "Maya Assistant" --org com.maya.assistant
+        # স্টেবল এফলেট কমান্ড রান করা (এখানে অটো-ইনস্টল প্রম্পটের ঝামেলা নেই)
+        flet build apk --product "Maya Assistant" --org com.maya.assistant
 
     - name: Find and list APK
       if: always()
