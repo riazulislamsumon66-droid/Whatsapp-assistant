@@ -6,49 +6,41 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: Install packages
       run: |
-        pip install --upgrade pip
         pip install -r requirements.txt
+        flutter --version 2>/dev/null || echo "Flutter will be installed by flet"
 
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.27.0'
-        channel: 'stable'
-
-    - name: Print Flutter info
-      run: flutter doctor -v
-
-    - name: Build APK with Flet
+    - name: Build APK
       run: |
-        flet build apk \
-          --output maya-assistant.apk \
+        echo "y" | flet build apk \
+          --output maya.apk \
           --product "Maya Assistant" \
           --org com.maya.assistant \
-          2>&1 | tail -100
+          2>&1 | tail -80
 
-    - name: Check APK exists
+    - name: Show result
+      if: always()
       run: |
-        ls -lh maya-assistant.apk 2>/dev/null || echo "Not in root, searching..."
-        find . -name "*.apk" -type f 2>/dev/null
+        echo "=== APK search ==="
+        find /home -name "*.apk" 2>/dev/null
+        find /tmp -name "*.apk" 2>/dev/null
+        ls -la maya.apk 2>/dev/null || echo "No maya.apk in cwd"
+        ls -la *.apk 2>/dev/null || echo "No apk in cwd"
 
-    - name: Upload APK
+    - name: Upload
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: MayaAssistant.apk
-        path: maya-assistant.apk
-        retention-days: 14
-        if-no-files-found: warn
+        path: maya.apk
+        retention-days: 7
