@@ -10,7 +10,6 @@ jobs:
 
     env:
       ANDROID_HOME: /home/runner/android-sdk
-      # নতুন Flet 0.85.2 এর রিকোয়ারমেন্ট অনুযায়ী ফ্ল্যাটার ভার্সন আপডেট করা হলো
       FLUTTER_VERSION: "3.41.7"
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -41,7 +40,6 @@ jobs:
         if [ ! -f "/home/runner/flutter/bin/flutter" ]; then
           echo "Downloading Flutter ${{ env.FLUTTER_VERSION }}..."
           cd /tmp
-          # লেটেস্ট ফ্ল্যাটার আর্ক্রাইভ ইউআরএল
           wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz" -O flutter.tar.xz
           cd /home/runner
           mkdir -p /home/runner/flutter
@@ -62,12 +60,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/android-sdk
-        key: android-sdk-34-v2
+        key: android-sdk-36-v1  # Flutter 3.41.7 এর জন্য SDK 36 ক্যাশ কি সেট করা হলো
 
     - name: Setup Android SDK
       run: |
-        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ] || [ ! -f "/home/runner/android-sdk/platform-tools/adb" ]; then
-          echo "Setting up Android SDK with Platform Tools..."
+        if [ ! -d "/home/runner/android-sdk/platforms/android-36" ] || [ ! -f "/home/runner/android-sdk/platform-tools/adb" ]; then
+          echo "Setting up Android SDK 36 with Platform Tools..."
           mkdir -p /home/runner/android-sdk/cmdline-tools/latest
           
           cd /tmp
@@ -80,14 +78,16 @@ jobs:
           export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
           
-          # platform-tools এবং প্রয়োজনীয় SDK বিল্ড টুলস ইন্সটল
-          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+          # Flutter 3.41.7 এর চাহিদামতো platforms;android-36 এবং build-tools ইন্সটল করা হলো
+          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36" "build-tools;36.0.0-rc1" "platform-tools" "build-tools;28.0.3"
         else
-          echo "Android SDK and Platform Tools cached!"
+          echo "Android SDK 36 and Platform Tools cached!"
         fi
 
-    - name: Install Flet
-      run: pip install --upgrade flet requests
+    - name: Install Flet and Dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install --upgrade flet requests watchdog
 
     - name: Configure Flutter and Android SDK
       run: |
@@ -103,19 +103,19 @@ jobs:
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
         export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
         
-        # গ্র্যাডল এনভায়রনমেন্টে অ্যান্ড্রয়েড SDK ভার্সন পুশ করা
-        export CLOUDSDK_ANDROID_COMPILER_VERSION=34
-        export CLOUDSDK_ANDROID_TARGET_VERSION=34
+        # গ্র্যাডল কম্পাইলার ভার্সন ৩৬ এ পুশ করা হলো
+        export CLOUDSDK_ANDROID_COMPILER_VERSION=36
+        export CLOUDSDK_ANDROID_TARGET_VERSION=36
         
-        # Flet বিল্ড কনফিগারেশন ফাইল তৈরি (wakelock_plus এবং অন্যান্য প্লাগইনের SDK এরর ফিক্স করার জন্য)
+        # Flet-এর টেম্পলেট কনফিগারেশনে SDK 36 সেট করা হলো
         cat <<EOF > flet-build.toml
         [android]
-        compile_sdk_version = 34
-        target_sdk_version = 34
+        compile_sdk_version = 36
+        target_sdk_version = 36
         min_sdk_version = 21
         EOF
         
-        # Flet বিল্ড কমান্ড রান করা (yes পাইপ করার মাধ্যমে যেকোনো অটো-প্রম্পট কনফার্ম করা হলো)
+        # Flet বিল্ড কমান্ড রান করা
         yes y | flet build apk --product "Maya Assistant" --org com.maya.assistant
 
     - name: Find and list APK
