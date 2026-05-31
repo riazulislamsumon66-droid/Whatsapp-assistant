@@ -1,0 +1,67 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          ccache \
+          git \
+          libffi-dev \
+          libssl-dev \
+          openjdk-17-jdk \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libgdbm-dev \
+          libnss3-dev \
+          libreadline-dev \
+          libsqlite3-dev \
+          wget \
+          curl \
+          llvm \
+          xz-utils \
+          tk-dev \
+          unzip
+    
+    - name: Install buildozer
+      run: |
+        pip3 install --upgrade cython virtualenv buildozer
+    
+    - name: Build APK
+      run: |
+        buildozer -v android debug 2>&1 | tail -50
+      env:
+        APP_ANDROID_API: 33
+        APP_ANDROID_MIN_API: 21
+        APP_ANDROID_ARCH: arm64-v8a
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: whatsapp-assistant-apk
+        path: bin/*.apk
+        retention-days: 30
