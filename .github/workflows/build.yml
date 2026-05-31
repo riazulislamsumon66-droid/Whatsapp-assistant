@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
     - name: Checkout code
@@ -18,7 +18,7 @@ jobs:
       with:
         python-version: '3.10'
     
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -34,7 +34,7 @@ jobs:
           zlib1g-dev \
           libncurses5-dev \
           libncursesw5-dev \
-          libtinfo5 \
+          libtinfo6 \
           cmake \
           libgdbm-dev \
           libnss3-dev \
@@ -42,22 +42,33 @@ jobs:
           libsqlite3-dev \
           wget \
           curl \
-          llvm \
           xz-utils \
           tk-dev \
-          unzip
+          unzip \
+          zip \
+          swig
+    
+    - name: Cache buildozer
+      uses: actions/cache@v4
+      with:
+        path: |
+          .buildozer
+          ~/.buildozer
+        key: buildozer-${{ hashFiles('buildozer.spec') }}
     
     - name: Install buildozer
       run: |
-        pip3 install --upgrade cython virtualenv buildozer
+        pip3 install --upgrade pip
+        pip3 install --upgrade cython buildozer
     
-    - name: Build APK
+    - name: Accept Android SDK licenses
       run: |
-        buildozer -v android debug 2>&1 | tail -50
-      env:
-        APP_ANDROID_API: 33
-        APP_ANDROID_MIN_API: 21
-        APP_ANDROID_ARCH: arm64-v8a
+        yes | buildozer android update || true
+    
+    - name: Build APK (debug)
+      timeout-minutes: 60
+      run: |
+        buildozer android debug 2>&1 | tail -100
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
