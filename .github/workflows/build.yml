@@ -13,9 +13,11 @@ jobs:
       FLUTTER_VERSION: "3.24.5"
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v5
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -55,6 +57,8 @@ jobs:
         key: android-sdk-34
 
     - name: Setup Android SDK
+      env:
+        JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
       run: |
         if [ ! -d "/opt/android-sdk/platforms/android-34" ]; then
           echo "Setting up Android SDK..."
@@ -70,8 +74,6 @@ jobs:
         else
           echo "Android SDK cached!"
         fi
-      env:
-        JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     - name: Install Flet
       run: pip install flet==0.24.1 requests
@@ -82,27 +84,33 @@ jobs:
         export ANDROID_SDK_ROOT=/opt/android-sdk
         flutter doctor 2>&1 | tail -15
 
-    - name: Build APK
+    - name: Build APK with Flet
       run: |
         export ANDROID_HOME=/opt/android-sdk
-        ANDROID_SDK_ROOT=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
         echo "y" | flet build apk \
-          --output /tmp/maya-assistant.apk \
           --product "Maya Assistant" \
           --org com.maya.assistant \
-          2>&1 | tail -80
+          2>&1 | tail -100
 
-    - name: Find APK
+    - name: Find and list APK
       if: always()
       run: |
-        ls -la /tmp/maya-assistant.apk 2>/dev/null || echo "Not in /tmp"
-        find /home -name "*.apk" 2>/dev/null
-        find /opt -name "*.apk" 2>/dev/null
+        echo "=== All APK files in workspace ==="
+        find /home/runner -name "*.apk" -type f 2>/dev/null
+        find /tmp -name "*.apk" -type f 2>/dev/null
+        find /opt -name "*.apk" -type f 2>/dev/null
+        echo "=== bin directory ==="
+        ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "No flutter-apk dir"
+        ls -la build/app/outputs/ 2>/dev/null || echo "No outputs dir"
+        echo "=== full build dir ==="
+        find . -maxdepth 4 -type d -name "outputs" 2>/dev/null
+        find . -maxdepth 4 -name "*.apk" -type f 2>/dev/null
 
     - name: Upload APK
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: MayaAssistant.apk
-        path: /tmp/maya-assistant.apk
+        path: build/app/outputs/flutter-apk/app-debug.apk
         retention-days: 7
