@@ -16,10 +16,11 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
 
-    - name: Install Flet
-      run: pip install flet
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -27,21 +28,24 @@ jobs:
         flutter-version: '3.27.0'
         channel: 'stable'
 
+    - name: Print Flutter info
+      run: flutter doctor -v
+
     - name: Build APK with Flet
       run: |
-        flutter doctor -v
         flet build apk \
           --output maya-assistant.apk \
           --product "Maya Assistant" \
           --org com.maya.assistant \
-          2>&1 | tail -80
+          2>&1 | tail -100
 
-    - name: Check APK
+    - name: Check APK exists
       run: |
-        ls -lh maya-assistant.apk 2>/dev/null || echo "Not in root"
+        ls -lh maya-assistant.apk 2>/dev/null || echo "Not in root, searching..."
         find . -name "*.apk" -type f 2>/dev/null
 
     - name: Upload APK
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: MayaAssistant.apk
