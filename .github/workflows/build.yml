@@ -9,8 +9,10 @@ jobs:
     timeout-minutes: 120
 
     env:
-      ANDROID_HOME: /opt/android-sdk
+      # /opt থেকে সরিয়ে সরাসরি হোম ডিরেক্টরিতে শিফট করা হলো
+      ANDROID_HOME: /home/runner/android-sdk
       FLUTTER_VERSION: "3.24.5"
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
     - name: Checkout
@@ -31,19 +33,19 @@ jobs:
       id: cache-flutter
       uses: actions/cache@v4
       with:
-        path: /opt/flutter
+        path: /home/runner/flutter
         key: flutter-${{ env.FLUTTER_VERSION }}
 
     - name: Download and install Flutter
       run: |
-        if [ ! -f "/opt/flutter/bin/flutter" ]; then
+        if [ ! -f "/home/runner/flutter/bin/flutter" ]; then
           echo "Downloading Flutter ${{ env.FLUTTER_VERSION }}..."
           cd /tmp
           wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz" -O flutter.tar.xz
-          cd /opt
-          sudo mkdir -p /opt/flutter
-          sudo tar xf /tmp/flutter.tar.xz -C /opt/
-          sudo rm /tmp/flutter.tar.xz
+          cd /home/runner
+          mkdir -p /home/runner/flutter
+          tar xf /tmp/flutter.tar.xz -C /home/runner/
+          rm /tmp/flutter.tar.xz
           echo "Flutter installed!"
         else
           echo "Flutter cached!"
@@ -51,36 +53,32 @@ jobs:
 
     - name: Add Flutter to PATH
       run: |
-        echo "/opt/flutter/bin" >> $GITHUB_PATH
-        echo "/opt/flutter/bin/cache/dart-sdk/bin" >> $GITHUB_PATH
+        echo "/home/runner/flutter/bin" >> $GITHUB_PATH
+        echo "/home/runner/flutter/bin/cache/dart-sdk/bin" >> $GITHUB_PATH
 
     - name: Cache Android SDK
       id: cache-android
       uses: actions/cache@v4
       with:
-        path: /opt/android-sdk
+        path: /home/runner/android-sdk
         key: android-sdk-34
 
     - name: Setup Android SDK
       run: |
-        if [ ! -d "/opt/android-sdk/platforms/android-34" ]; then
+        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ]; then
           echo "Setting up Android SDK..."
-          # ডিরেক্টরি তৈরি এবং পারমিশন ঠিক করা
-          sudo mkdir -p /opt/android-sdk/cmdline-tools/latest
-          sudo chown -R $USER:$USER /opt/android-sdk
+          mkdir -p /home/runner/android-sdk/cmdline-tools/latest
           
           cd /tmp
           wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
           unzip -q tools.zip
           
-          # ফাইলগুলো সঠিক জায়গায় কপি করা
-          cp -r cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/
+          cp -r cmdline-tools/* /home/runner/android-sdk/cmdline-tools/latest/
           rm -rf cmdline-tools tools.zip
           
-          # এনভায়রনমেন্ট পাথ এক্সপোর্ট করে রান করা
-          export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
-          yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
+          yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
         else
           echo "Android SDK cached!"
         fi
@@ -88,18 +86,20 @@ jobs:
     - name: Install Flet
       run: pip install flet==0.24.1 requests
 
-    - name: Flutter doctor
+    - name: Configure Flutter and Android SDK
       run: |
-        export ANDROID_HOME=/opt/android-sdk
-        export ANDROID_SDK_ROOT=/opt/android-sdk
-        export PATH="/opt/flutter/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+        export ANDROID_HOME=/home/runner/android-sdk
+        export ANDROID_SDK_ROOT=/home/runner/android-sdk
+        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
+        # ফ্ল্যাটারকে এসডিকে পাথ চিনিয়ে দেওয়া
+        flutter config --android-sdk /home/runner/android-sdk
         flutter doctor
 
     - name: Build APK with Flet
       run: |
-        export ANDROID_HOME=/opt/android-sdk
-        export ANDROID_SDK_ROOT=/opt/android-sdk
-        export PATH="/opt/flutter/bin:/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+        export ANDROID_HOME=/home/runner/android-sdk
+        export ANDROID_SDK_ROOT=/home/runner/android-sdk
+        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
         flet build apk --product "Maya Assistant" --org com.maya.assistant
 
     - name: Find and list APK
@@ -122,3 +122,4 @@ jobs:
           build/app/outputs/flutter-apk/*.apk
           build/**/*.apk
         retention-days: 30
+        
