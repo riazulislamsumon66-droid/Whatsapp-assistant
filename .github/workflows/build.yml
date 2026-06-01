@@ -29,7 +29,6 @@ jobs:
         SDK=/home/runner/.buildozer/android/platform/android-sdk
         mkdir -p $SDK
 
-        # Download cmdline-tools
         mkdir -p $SDK/cmdline-tools/latest
         cd /tmp
         wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
@@ -37,10 +36,9 @@ jobs:
         cp -r cmdline-tools/* $SDK/cmdline-tools/latest/
         rm -rf cmdline-tools tools.zip
 
-        # Create 'tools' symlink that p4a expects (points to cmdline-tools/latest)
+        # Create 'tools' symlink that p4a expects
         ln -sfn $SDK/cmdline-tools/latest $SDK/tools
 
-        # Accept licenses and install
         export ANDROID_HOME=$SDK
         yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
         $SDK/cmdline-tools/latest/bin/sdkmanager --install \
@@ -49,18 +47,14 @@ jobs:
           "build-tools;34.0.0" \
           "build-tools;33.0.2" \
           "platform-tools"
-
-        echo "=== SDK structure ==="
-        ls $SDK/
-        ls $SDK/build-tools/
-        ls $SDK/platforms/
-        echo "aidl:"
-        find $SDK -name "aidl" 2>/dev/null || echo "no aidl binary"
+        echo "SDK ready!"
 
     - name: Install Buildozer + Dependencies
       run: |
-        pip install --upgrade pip
-        pip install cython==0.29.36 buildozer==1.5.0
+        pip install --upgrade pip setuptools wheel
+        # Install Cython 3.x first (required for Kivy 2.3.x with Python 3.11)
+        pip install "cython>=3.0,<3.1"
+        pip install buildozer==1.5.0
         pip install kivy==2.3.0 requests pillow
 
     - name: Build APK with Buildozer
