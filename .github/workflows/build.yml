@@ -11,7 +11,6 @@ jobs:
     env:
       ANDROID_HOME: /home/runner/android-sdk
       ANDROID_SDK_ROOT: /home/runner/android-sdk
-      BUILDOZER_ALLOW_ANY_SDK: 1
 
     steps:
     - name: Checkout
@@ -28,80 +27,62 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Cache Android SDK
-      id: cache-android
-      uses: actions/cache@v4
-      with:
-        path: /home/runner/android-sdk
-        key: android-sdk-34-v3
-
-    - name: Setup Android SDK 34
+    - name: Install Android SDK + NDK
       run: |
         export ANDROID_HOME=/home/runner/android-sdk
-        export ANDROID_SDK_ROOT=/home/runner/android-sdk
+        mkdir -p $ANDROID_HOME/cmdline-tools/latest
+        cd /tmp
+        wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
+        unzip -q tools.zip
+        cp -r cmdline-tools/* $ANDROID_HOME/cmdline-tools/latest/
+        rm -rf cmdline-tools tools.zip
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+          "platforms;android-34" \
+          "platforms;android-33" \
+          "build-tools;34.0.0" \
+          "build-tools;33.0.2" \
+          "platform-tools" \
+          --no_https --proxy=http --proxy_host=0.0.0.0 --proxy_port=0 2>/dev/null || \
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+          "platforms;android-34" \
+          "platforms;android-33" \
+          "build-tools;34.0.0" \
+          "build-tools;33.0.2" \
+          "platform-tools"
+        echo "SDK installed!"
+        ls $ANDROID_HOME/platforms/
+        ls $ANDROID_HOME/build-tools/
 
-        if [ ! -d "$ANDROID_HOME/platforms/android-34" ] || [ ! -d "$ANDROID_HOME/build-tools/34.0.0" ]; then
-          echo "Setting up Android SDK 34..."
-          mkdir -p $ANDROID_HOME/cmdline-tools/latest
-          cd /tmp
-          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
-          unzip -q tools.zip
-          cp -r cmdline-tools/* $ANDROID_HOME/cmdline-tools/latest/
-          rm -rf cmdline-tools tools.zip
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "platform-tools" \
-            "ndk;25.2.9519653"
-        else
-          echo "Android SDK 34 cached and ready!"
-        fi
-
-        # Verify
-        ls -la $ANDROID_HOME/platforms/
-        ls -la $ANDROID_HOME/build-tools/
-
-    - name: Install Cython + Buildozer
+    - name: Install Buildozer
       run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install cython==0.29.36
-        pip install buildozer==1.5.0
+        pip install --upgrade pip
+        pip install cython==0.29.36 buildozer==1.5.0
         pip install kivy==2.3.0 requests pillow
 
-    - name: Cache Buildozer global directory
-      uses: actions/cache@v4
-      with:
-        path: /home/runner/.buildozer
-        key: buildozer-global-${{ runner.os }}-v2
-        restore-keys: |
-          buildozer-global-${{ runner.os }}-
-
-    - name: Build APK with Buildozer
+    - name: Build APK
       run: |
-        set -e
         export ANDROID_HOME=/home/runner/android-sdk
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
-        export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/build-tools/34.0.0:$PATH"
+        export PATH="$ANDROID_HOME/build-tools/34.0.0:$ANDROID_HOME/platform-tools:$PATH"
 
-        # Accept licenses silently
-        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        # Create the symlink buildozer expects
+        mkdir -p /home/runner/.buildozer/android/platform/
+        ln -sfn /home/runner/android-sdk /home/runner/.buildozer/android/platform/android-sdk
 
-        echo "=== Android SDK structure ==="
-        ls $ANDROID_HOME/
-        ls $ANDROID_HOME/build-tools/
-        ls $ANDROID_HOME/platforms/
+        echo "Symlinks:"
+        ls -la /home/runner/.buildozer/android/platform/
 
-        echo "=== Starting buildozer ==="
-        # Use buildozer with explicit SDK path
+        echo "aidl location:"
+        find /home/runner/android-sdk -name "aidl" -type f 2>/dev/null || echo "No aidl found"
+
         buildozer -v android debug 2>&1
 
-    - name: Find and list APK
+    - name: Find APK
       if: always()
       run: |
         echo "=== APK files ==="
         find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-        ls -la bin/ 2>/dev/null || echo "bin/ empty or not found"
 
     - name: Upload APK
       if: success()
