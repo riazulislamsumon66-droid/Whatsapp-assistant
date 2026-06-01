@@ -9,12 +9,13 @@ requirements = python3,kivy==2.3.0,requests,pillow,urllib3,charset_normalizer,ce
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,FOREGROUND_SERVICE,WAKE_LOCK
-android.api = 33
+android.api = 34
 android.minapi = 21
 android.arch = arm64-v8a
 android.allow_backup = True
 android.logcat_filters = *:S python:D
 p4a.local_recipes =
+
 [buildozer]
 log_level = 2
-warn_on_root = 1
+warn_on_root = 0
