@@ -10,8 +10,7 @@ jobs:
 
     env:
       ANDROID_HOME: /home/runner/android-sdk
-      FLUTTER_VERSION: "3.24.5"
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      ANDROID_SDK_ROOT: /home/runner/android-sdk
 
     steps:
     - name: Checkout
@@ -28,120 +27,81 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Cache Flutter SDK
-      id: cache-flutter
-      uses: actions/cache@v4
-      with:
-        path: /home/runner/flutter
-        key: flutter-${{ env.FLUTTER_VERSION }}
-
-    - name: Download and install Flutter
-      run: |
-        if [ ! -f "/home/runner/flutter/bin/flutter" ]; then
-          echo "Downloading Flutter ${{ env.FLUTTER_VERSION }}..."
-          cd /tmp
-          wget -q "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz" -O flutter.tar.xz
-          cd /home/runner
-          mkdir -p /home/runner/flutter
-          tar xf /tmp/flutter.tar.xz -C /home/runner/
-          rm /tmp/flutter.tar.xz
-          echo "Flutter installed!"
-        else
-          echo "Flutter cached!"
-        fi
-
-    - name: Add Flutter to PATH
-      run: |
-        echo "/home/runner/flutter/bin" >> $GITHUB_PATH
-        echo "/home/runner/flutter/bin/cache/dart-sdk/bin" >> $GITHUB_PATH
-
     - name: Cache Android SDK
       id: cache-android
       uses: actions/cache@v4
       with:
         path: /home/runner/android-sdk
-        key: android-sdk-34-v3
+        key: android-sdk-34-v2
 
     - name: Setup Android SDK
       run: |
-        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ] || [ ! -f "/home/runner/android-sdk/platform-tools/adb" ]; then
+        if [ ! -d "/home/runner/android-sdk/platforms/android-34" ]; then
           echo "Setting up Android SDK 34..."
           mkdir -p /home/runner/android-sdk/cmdline-tools/latest
-          
           cd /tmp
           wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
           unzip -q tools.zip
-          
           cp -r cmdline-tools/* /home/runner/android-sdk/cmdline-tools/latest/
           rm -rf cmdline-tools tools.zip
-          
-          export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          
-          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+          /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "platform-tools"
         else
           echo "Android SDK 34 cached!"
         fi
 
-    - name: Install Specific Stable Flet
+    - name: Install Buildozer and Dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        pip install flet==0.24.1 requests
+        pip install \
+          buildozer==1.5.0 \
+          kivy==2.3.0 \
+          requests \
+          pillow \
+          cython==0.29.36
 
-    - name: Configure Flutter and Android SDK
+    - name: Cache Gradle and Buildozer
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.buildozer
+          ~/.gradle
+        key: buildozer-gradle-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          buildozer-gradle-${{ runner.os }}-
+
+    - name: Configure Android SDK for Buildozer
+      run: |
+        set -e
+        yes | /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+        cp /home/runner/android-sdk/cmdline-tools/latest/bin/sdkmanager /usr/local/bin/ 2>/dev/null || true
+
+    - name: Build APK with Buildozer
       run: |
         export ANDROID_HOME=/home/runner/android-sdk
         export ANDROID_SDK_ROOT=/home/runner/android-sdk
-        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
-        flutter config --android-sdk /home/runner/android-sdk
-        flutter doctor
+        export PATH="/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
 
-    - name: Pre-configure Pub Cache for Wakelock Plus
-      run: |
-        # গ্র্যাডল যাতে রান টাইমে wakelock_plus এর গ্লোবাল ভ্যালু নাল না পায়, তাই গ্লোবাল গ্রেডল প্রপার্টিজ কনফিগার করা হলো
-        mkdir -p ~/.gradle
-        echo "flutter.compileSdkVersion=34" >> ~/.gradle/gradle.properties
-        echo "flutter.targetSdkVersion=34" >> ~/.gradle/gradle.properties
-        echo "flutter.minSdkVersion=21" >> ~/.gradle/gradle.properties
+        # Accept licenses
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
-    - name: Build APK with Flet
-      run: |
-        export ANDROID_HOME=/home/runner/android-sdk
-        export ANDROID_SDK_ROOT=/home/runner/android-sdk
-        export PATH="/home/runner/flutter/bin:/home/runner/android-sdk/platform-tools:/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
-        
-        export CLOUDSDK_ANDROID_COMPILER_VERSION=34
-        export CLOUDSDK_ANDROID_TARGET_VERSION=34
-        
-        # Flet-এর বিল্ড কনফিগারেশন ডিক্লেয়ার করা
-        cat <<EOF > flet-build.toml
-        [android]
-        compile_sdk_version = 34
-        target_sdk_version = 34
-        min_sdk_version = 21
-        EOF
-        
-        # ফ্লেট বিল্ড কমান্ড রান করা
-        flet build apk --product "Maya Assistant" --org com.maya.assistant
+        # Debug build - no signing needed
+        buildozer -v android debug 2>&1 | tail -80
 
     - name: Find and list APK
       if: always()
       run: |
-        echo "=== All APK files in workspace ==="
-        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found anywhere"
-        echo "=== Common Flet paths ==="
-        ls -la build/apk/ 2>/dev/null || echo "build/apk not found"
-        ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "flutter-apk dir not found"
-        ls -la build/ 2>/dev/null || echo "build dir not found"
+        echo "=== APK files ==="
+        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+        ls -la bin/ 2>/dev/null || echo "bin/ not found"
 
     - name: Upload APK
-      if: always()
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: Maya-Assistant-APK
-        path: |
-          build/apk/*.apk
-          build/app/outputs/flutter-apk/*.apk
-          build/**/*.apk
+        path: bin/*.apk
         retention-days: 30
-        
