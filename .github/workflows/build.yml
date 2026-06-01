@@ -59,7 +59,7 @@ jobs:
         export ANDROID_HOME=/home/runner/android-sdk
         flutter config --android-sdk $ANDROID_HOME
         flutter doctor --android-licenses || true
-        flutter version
+        flutter --version
         dart --version
 
     - name: Install Flet CLI
