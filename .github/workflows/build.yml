@@ -59,28 +59,35 @@ jobs:
         export ANDROID_HOME=/home/runner/android-sdk
         flutter config --android-sdk $ANDROID_HOME
         flutter doctor --android-licenses || true
+        yes | flutter doctor --android-licenses 2>/dev/null || true
         flutter --version
         dart --version
 
     - name: Install Flet CLI
       run: |
         pip install flet-cli>=0.25.0 requests pillow
+        # Pre-accept Flutter/Android + Flet prompts for CI
+        export FLET_PREFERENCES_PATH=/tmp/flet_prefs
+        export CI=true
 
     - name: Build APK with Flet
       run: |
         export ANDROID_HOME=/home/runner/android-sdk
         export ANDROID_SDK_ROOT=$ANDROID_HOME
+        export CI=true
+        export FLET_PREFERENCES_PATH=/tmp/flet_prefs
         
         yes | sdkmanager --licenses > /dev/null 2>&1 || true
         
-        flet build apk \
+        # Use --no-interactive if available, or pipe yes
+        yes | flet build apk \
           --product "Maya Assistant" \
           --org com.maya.assistant \
           --description "Maya WhatsApp Assistant" \
           --android-permissions "android.permission.INTERNET=true" \
           --android-permissions "android.permission.ACCESS_NETWORK_STATE=true" \
           --android-permissions "android.permission.FOREGROUND_SERVICE=true" \
-          --android-permissions "android.permission.WAKE_LOCK=true"
+          --android-permissions "android.permission.WAKE_LOCK=true" 2>&1
 
     - name: Find APK
       if: always()
