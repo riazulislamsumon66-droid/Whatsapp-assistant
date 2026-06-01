@@ -1,5 +1,5 @@
-# WhatsApp Assistant - Python source (keep as-is)
-# This is the main app entry point for buildozer/p4a
+# WhatsApp Assistant - Flet version for Android APK
+# Same functionality as Kivy version but uses Flet (Flutter-based)
 
 import json
 import os
@@ -7,24 +7,11 @@ import threading
 import time
 import requests
 
-# Simple Kivy-based UI for Android APK
-import kivy
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.button import Button
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
-from kivy.core.window import Window
-from kivy.clock import Clock
-from kivy.utils import platform
+import flet as ft
 
-Window.clearcolor = (0.06, 0.08, 0.1, 1)
-
-CONFIG_DIR = "/data/data/com.termux/files/home" if platform == "android" else "."
+CONFIG_DIR = "."
 CONFIG_FILE = os.path.join(CONFIG_DIR, "maya_config.json")
+
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -41,9 +28,11 @@ def load_config():
         "bridge_url": "http://localhost:3000"
     }
 
+
 def save_config(cfg):
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
+
 
 def check_bridge(url="http://localhost:3000"):
     try:
@@ -52,12 +41,16 @@ def check_bridge(url="http://localhost:3000"):
     except:
         return False
 
+
 def send_message(to, message, bridge_url="http://localhost:3000"):
     try:
-        r = requests.post(f"{bridge_url}/send", json={"chatId": to, "message": message}, timeout=10)
+        r = requests.post(f"{bridge_url}/send",
+                         json={"chatId": to, "message": message},
+                         timeout=10)
         return r.status_code == 200
     except:
         return False
+
 
 def generate_ai_reply(message, website_data=None, config=None):
     if not config:
@@ -68,14 +61,19 @@ def generate_ai_reply(message, website_data=None, config=None):
     bot_name = config.get("bot_name", "Maya")
     if not api_key:
         return f"Thank you for your message! {bot_name} will respond shortly."
-    prompt = f"You are {bot_name}, a helpful WhatsApp assistant. Tone: {tone}. Reply in the SAME language as the customer. Keep reply concise (under 300 words). Never mention being an AI. Be warm and professional."
+    prompt = (f"You are {bot_name}, a helpful WhatsApp assistant. Tone: {tone}. "
+              f"Reply in the SAME language as the customer. Keep reply concise (under 300 words). "
+              f"Never mention being an AI. Be warm and professional.")
     if website_data:
         prompt += f"\n\nBusiness Info:\n{website_data}"
     try:
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": message}], "max_tokens": 500, "temperature": 0.7},
+            json={"model": model, "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": message}
+            ], "max_tokens": 500, "temperature": 0.7},
             timeout=30
         )
         if r.status_code == 200:
@@ -84,13 +82,15 @@ def generate_ai_reply(message, website_data=None, config=None):
         pass
     return "Thank you for your message! I'll respond shortly."
 
+
 def scrape_website(url):
     if not url:
         return None
     if not url.startswith("http"):
         url = "https://" + url
     try:
-        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        r = requests.get(url, timeout=10,
+                        headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code == 200:
             import re
             text = re.sub(r'<[^>]+>', ' ', r.text)
@@ -100,183 +100,197 @@ def scrape_website(url):
         pass
     return None
 
-class DashboardTab(BoxLayout):
-    def __init__(self, app, **kwargs):
-        super().__init__(**kwargs)
-        self.app = app
-        self.orientation = "vertical"
-        self.padding = 10
-        self.spacing = 8
 
-        self.add_widget(Label(text="Maya Assistant", font_size=24, size_hint_y=0.1, color=(0.11, 0.6, 0.94, 1)))
+def main(page: ft.Page):
+    page.title = "Maya Assistant"
+    page.padding = 20
+    page.scroll = ft.ScrollMode.AUTO
+    page.theme_mode = ft.ThemeMode.DARK
+    page.bgcolor = "#0F1419"
 
-        status_box = BoxLayout(size_hint_y=0.1)
-        self.status_label = Label(text="● Disconnected", color=(0.96, 0.13, 0.18, 1), font_size=14)
-        status_box.add_widget(self.status_label)
-        self.add_widget(status_box)
+    cfg = load_config()
+    auto_reply_enabled = True
 
-        # Stats
-        stats = GridLayout(cols=2, size_hint_y=0.2, spacing=5)
-        self.stat_messages = Label(text="Messages: 0", font_size=13)
-        self.stat_contacts = Label(text="Contacts: 0", font_size=13)
-        self.stat_ai = Label(text="AI Replies: 0", font_size=13)
-        self.stat_today = Label(text="Today: 0", font_size=13)
-        stats.add_widget(self.stat_messages)
-        stats.add_widget(self.stat_contacts)
-        stats.add_widget(self.stat_ai)
-        stats.add_widget(self.stat_today)
-        self.add_widget(stats)
+    # ─── Status ───
+    status_icon = ft.Icon(name=ft.Icons.RADIO_BUTTON_OFF, color=ft.Colors.RED)
+    status_text = ft.Text("Disconnected", color=ft.Colors.RED, size=14, weight=ft.FontWeight.BOLD)
 
-        self.add_widget(Label(text="Auto Reply", font_size=14, size_hint_y=0.05))
-        self.auto_switch = Button(text="Auto Reply: ON", background_color=(0.11, 0.6, 0.94, 1), size_hint_y=0.08)
-        self.auto_switch.bind(on_press=self.toggle_auto)
-        self.auto_switch.state = "down"
-        self.add_widget(self.auto_switch)
+    # ─── Stats ───
+    stat_msgs = ft.Text("Messages: 0", size=12)
+    stat_contacts = ft.Text("Contacts: 0", size=12)
+    stat_ai = ft.Text("AI Replies: 0", size=12)
+    stat_today = ft.Text("Today: 0", size=12)
 
-        btn_box = BoxLayout(size_hint_y=0.1, spacing=5)
-        refresh_btn = Button(text="Refresh", background_color=(0, 0.73, 0.49, 1))
-        refresh_btn.bind(on_press=self.refresh)
-        scrape_btn = Button(text="Scrape Website", background_color=(0.49, 0.23, 0.93, 1))
-        scrape_btn.bind(on_press=self.scrape_now)
-        btn_box.add_widget(refresh_btn)
-        btn_box.add_widget(scrape_btn)
-        self.add_widget(btn_box)
+    # ─── Auto Reply Toggle ───
+    auto_btn = ft.ElevatedButton(
+        "Auto Reply: ON",
+        icon=ft.Icons.PLAY_ARROW,
+        color=ft.Colors.ONE,
+        bgcolor=ft.Colors.BLUE_700,
+    )
 
-        self.msg_label = Label(text="Recent activity will appear here...", font_size=12, size_hint_y=0.3, color=(0.55, 0.6, 0.65, 1), halign="center", valign="top")
-        self.msg_label.bind(size=self.msg_label.setter("text_size"))
-        self.add_widget(self.msg_label)
-        Clock.schedule_interval(self.auto_refresh, 10)
+    activity_log = ft.Text("Recent activity will appear here...",
+                           size=11, color=ft.Colors.GREY_500)
 
-    def toggle_auto(self, instance):
-        if instance.state == "down":
-            instance.text = "Auto Reply: ON"
-            instance.background_color = (0.11, 0.6, 0.94, 1)
+    # ─── Settings fields ───
+    api_key_field = ft.TextField(label="API Key", value=cfg.get("ai_api_key", ""),
+                                 password=True, can_reveal_password=True)
+    model_field = ft.TextField(label="Model", value=cfg.get("ai_model", "google/gemini-2.0-flash-free"))
+    website_field = ft.TextField(label="Website URL", value=cfg.get("website_url", ""))
+    backend_field = ft.TextField(label="Backend API", value=cfg.get("backend_api", ""))
+    bot_name_field = ft.TextField(label="Bot Name", value=cfg.get("bot_name", "Maya"))
+    bridge_field = ft.TextField(label="Bridge URL", value=cfg.get("bridge_url", "http://localhost:3000"))
+    save_result = ft.Text("", size=12)
+
+    def refresh_status(e=None):
+        bridge = bridge_field.value or "http://localhost:3000"
+        if check_bridge(bridge):
+            status_icon.name = ft.Icons.RADIO_BUTTON_CHECKED
+            status_icon.color = ft.Colors.GREEN
+            status_text.value = "Connected"
+            status_text.color = ft.Colors.GREEN
         else:
-            instance.text = "Auto Reply: OFF"
-            instance.background_color = (0.5, 0.5, 0.5, 1)
+            status_icon.name = ft.Icons.RADIO_BUTTON_OFF
+            status_icon.color = ft.Colors.RED
+            status_text.value = "Disconnected"
+            status_text.color = ft.Colors.RED
+        page.update()
 
-    def refresh(self, instance=None):
-        cfg = load_config()
-        if check_bridge(cfg.get("bridge_url", "http://localhost:3000")):
-            self.status_label.text = "● Connected"
-            self.status_label.color = (0, 0.73, 0.49, 1)
+    def toggle_auto(e):
+        nonlocal auto_reply_enabled
+        auto_reply_enabled = not auto_reply_enabled
+        if auto_reply_enabled:
+            auto_btn.text = "Auto Reply: ON"
+            auto_btn.bgcolor = ft.Colors.BLUE_700
+            auto_btn.icon = ft.Icons.PLAY_ARROW
         else:
-            self.status_label.text = "● Disconnected"
-            self.status_label.color = (0.96, 0.13, 0.18, 1)
+            auto_btn.text = "Auto Reply: OFF"
+            auto_btn.bgcolor = ft.Colors.GREY_700
+            auto_btn.icon = ft.Icons.PAUSE
+        page.update()
 
-    def scrape_now(self, instance):
-        cfg = load_config()
-        url = cfg.get("website_url", "")
+    def scrape_now(e):
+        url = website_field.value.strip()
         if url:
             data = scrape_website(url)
-            self.msg_label.text = f"Scraped {len(data) if data else 0} chars from {url}"
+            activity_log.value = f"Scraped {len(data) if data else 0} chars from {url}"
         else:
-            self.msg_label.text = "Set website URL in Settings first"
+            activity_log.value = "Set website URL in Settings first"
+        page.update()
 
-    def auto_refresh(self, dt):
-        if self.auto_switch.state == "down":
-            self.refresh()
-
-class SettingsTab(BoxLayout):
-    def __init__(self, app, **kwargs):
-        super().__init__(**kwargs)
-        self.app = app
-        self.orientation = "vertical"
-        self.padding = 10
-        self.spacing = 6
+    def save_settings(e):
         cfg = load_config()
-
-        self.add_widget(Label(text="AI Settings", font_size=16, size_hint_y=0.06, color=(0.11, 0.6, 0.94, 1)))
-
-        self.add_widget(Label(text="API Key:", font_size=13, size_hint_y=0.04))
-        self.api_key = TextInput(text=cfg.get("ai_api_key", ""), password=True, multiline=False, size_hint_y=0.07)
-        self.add_widget(self.api_key)
-
-        self.add_widget(Label(text="Model:", font_size=13, size_hint_y=0.04))
-        self.model = TextInput(text=cfg.get("ai_model", "google/gemini-2.0-flash-free"), multiline=False, size_hint_y=0.07)
-        self.add_widget(self.model)
-
-        self.add_widget(Label(text="Website URL:", font_size=13, size_hint_y=0.04))
-        self.website = TextInput(text=cfg.get("website_url", ""), multiline=False, size_hint_y=0.07)
-        self.add_widget(self.website)
-
-        self.add_widget(Label(text="Backend API:", font_size=13, size_hint_y=0.04))
-        self.backend = TextInput(text=cfg.get("backend_api", ""), multiline=False, size_hint_y=0.07)
-        self.add_widget(self.backend)
-
-        self.add_widget(Label(text="Bot Name:", font_size=13, size_hint_y=0.04))
-        self.bot_name = TextInput(text=cfg.get("bot_name", "Maya"), multiline=False, size_hint_y=0.07)
-        self.add_widget(self.bot_name)
-
-        self.add_widget(Label(text="Bridge URL:", font_size=13, size_hint_y=0.04))
-        self.bridge = TextInput(text=cfg.get("bridge_url", "http://localhost:3000"), multiline=False, size_hint_y=0.07)
-        self.add_widget(self.bridge)
-
-        btn_box = BoxLayout(size_hint_y=0.1, spacing=8)
-        save_btn = Button(text="Save Settings", background_color=(0.11, 0.6, 0.94, 1))
-        save_btn.bind(on_press=self.save)
-        test_btn = Button(text="Test API", background_color=(0.49, 0.23, 0.93, 1))
-        test_btn.bind(on_press=self.test_api)
-        btn_box.add_widget(save_btn)
-        btn_box.add_widget(test_btn)
-        self.add_widget(btn_box)
-
-        self.result_label = Label(text="", font_size=12, size_hint_y=0.08, color=(0, 0.73, 0.49, 1))
-        self.add_widget(self.result_label)
-
-    def save(self, instance):
-        cfg = load_config()
-        cfg["ai_api_key"] = self.api_key.text
-        cfg["ai_model"] = self.model.text
-        cfg["website_url"] = self.website.text
-        cfg["backend_api"] = self.backend.text
-        cfg["bot_name"] = self.bot_name.text
-        cfg["bridge_url"] = self.bridge.text
+        cfg["ai_api_key"] = api_key_field.value
+        cfg["ai_model"] = model_field.value
+        cfg["website_url"] = website_field.value
+        cfg["backend_api"] = backend_field.value
+        cfg["bot_name"] = bot_name_field.value
+        cfg["bridge_url"] = bridge_field.value
         save_config(cfg)
-        self.result_label.text = "Saved!"
-        self.result_label.color = (0, 0.73, 0.49, 1)
+        save_result.value = "Saved!"
+        save_result.color = ft.Colors.GREEN
+        page.update()
 
-    def test_api(self, instance):
-        key = self.api_key.text.strip()
+    def test_api(e):
+        key = api_key_field.value.strip()
         if not key:
-            self.result_label.text = "Enter API key first"
-            self.result_label.color = (0.96, 0.13, 0.18, 1)
+            save_result.value = "Enter API key first"
+            save_result.color = ft.Colors.RED
+            page.update()
             return
-        self.result_label.text = "Testing..."
-        self.result_label.color = (0.55, 0.6, 0.65, 1)
-        def test():
+        save_result.value = "Testing..."
+        save_result.color = ft.Colors.GREY_400
+        page.update()
+
+        def _test():
             try:
                 r = requests.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={"Authorization": f"Bearer {key}"},
-                    json={"model": self.model.text or "google/gemini-2.0-flash-free", "messages": [{"role": "user", "content": "Say hi"}], "max_tokens": 50},
+                    json={"model": model_field.value or "google/gemini-2.0-flash-free",
+                          "messages": [{"role": "user", "content": "Say hi"}],
+                          "max_tokens": 50},
                     timeout=15
                 )
                 if r.status_code == 200:
-                    Clock.schedule_once(lambda dt: setattr(self.result_label, "text", "API working!"))
-                    Clock.schedule_once(lambda dt: setattr(self.result_label, "color", (0, 0.73, 0.49, 1)))
+                    save_result.value = "API working!"
+                    save_result.color = ft.Colors.GREEN
                 else:
-                    Clock.schedule_once(lambda dt: setattr(self.result_label, "text", f"Error: {r.status_code}"))
-                    Clock.schedule_once(lambda dt: setattr(self.result_label, "color", (0.96, 0.13, 0.18, 1)))
-            except Exception as e:
-                Clock.schedule_once(lambda dt: setattr(self.result_label, "text", f"Failed: {str(e)[:40]}"))
-                Clock.schedule_once(lambda dt: setattr(self.result_label, "color", (0.96, 0.13, 0.18, 1)))
-        threading.Thread(target=test, daemon=True).start()
+                    save_result.value = f"Error: {r.status_code}"
+                    save_result.color = ft.Colors.RED
+            except Exception as ex:
+                save_result.value = f"Failed: {str(ex)[:40]}"
+                save_result.color = ft.Colors.RED
+            page.update()
 
-class MayaApp(App):
-    def build(self):
-        self.title = "Maya Assistant"
-        tabs = TabbedPanel(do_default_tab=False, background_color=(0.06, 0.08, 0.1, 1))
+        threading.Thread(target=_test, daemon=True).start()
 
-        dash_tab = TabbedPanelItem(text="Dashboard")
-        dash_tab.add_widget(DashboardTab(self))
-        tabs.add_widget(dash_tab)
+    # ─── Dashboard Tab ───
+    dashboard = ft.Column([
+        ft.Text("Maya Assistant", size=24, weight=ft.FontWeight.BOLD,
+                color=ft.Colors.BLUE_400),
+        ft.Row([status_icon, status_text], spacing=5),
+        ft.Divider(height=1),
+        ft.Row([
+            ft.Column([stat_msgs, stat_ai], expand=1),
+            ft.Column([stat_contacts, stat_today], expand=1),
+        ]),
+        ft.Divider(height=1),
+        auto_btn,
+        ft.Row([
+            ft.ElevatedButton("Refresh", icon=ft.Icons.REFRESH,
+                             bgcolor=ft.Colors.GREEN_700, color=ft.Colors.WHITE,
+                             on_click=refresh_status),
+            ft.ElevatedButton("Scrape Website", icon=ft.Icons.LINK,
+                             bgcolor=ft.Colors.PURPLE_700, color=ft.Colors.WHITE,
+                             on_click=scrape_now),
+        ], wrap=True),
+        activity_log,
+    ], spacing=10, expand=True)
 
-        settings_tab = TabbedPanelItem(text="Settings")
-        settings_tab.add_widget(SettingsTab(self))
-        tabs.add_widget(settings_tab)
+    # ─── Settings Tab ───
+    settings = ft.Column([
+        ft.Text("AI Settings", size=18, weight=ft.FontWeight.BOLD,
+                color=ft.Colors.BLUE_400),
+        api_key_field,
+        model_field,
+        website_field,
+        backend_field,
+        bot_name_field,
+        bridge_field,
+        ft.Row([
+            ft.ElevatedButton("Save Settings", icon=ft.Icons.SAVE,
+                             bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE,
+                             on_click=save_settings),
+            ft.ElevatedButton("Test API", icon=ft.Icons.SCIENCE,
+                             bgcolor=ft.Colors.PURPLE_700, color=ft.Colors.WHITE,
+                             on_click=test_api),
+        ], wrap=True),
+        save_result,
+    ], spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
 
-        return tabs
+    # ─── Tabs ───
+    tabs = ft.Tabs(
+        selected_index=0,
+        animation_duration=200,
+        expand=True,
+        tabs=[
+            ft.Tab(text="Dashboard", icon=ft.Icons.DASHBOARD, content=dashboard),
+            ft.Tab(text="Settings", icon=ft.Icons.SETTINGS, content=settings),
+        ],
+    )
 
-if __name__ == "__main__":
-    MayaApp().run()
+    page.add(tabs)
+    auto_btn.on_click = toggle_auto
+
+    # Auto-refresh timer
+    def auto_refresh_loop():
+        while True:
+            time.sleep(10)
+            if auto_reply_enabled:
+                refresh_status()
+
+    threading.Thread(target=auto_refresh_loop, daemon=True).start()
+
+
+ft.app(target=main)
